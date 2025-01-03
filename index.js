@@ -5,15 +5,15 @@ import api from './backend/index.js'; // Import backend API
 import { readFileSync } from 'node:fs';
 
 // Baca file JSON secara manual
-const swaggerJson = JSON.parse(readFileSync('./swagger-output.json', 'utf-8'));
+//const swaggerJson = JSON.parse(readFileSync('./swagger-output.json', 'utf-8'));
 
 // Inisialisasi Hono app
 const app = new Hono();
 
 // Serve swagger.json
-app.get('/swagger.json', (c) => {
+/*app.get('/swagger.json', (c) => {
     return c.json(swaggerJson);
-  });
+  });*/
 
 // Landing Page
 app.get('/', (c) => {
