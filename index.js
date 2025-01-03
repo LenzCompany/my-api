@@ -72,12 +72,21 @@ app.get('/', (c) => {
 });
 
 // Swagger UI
-app.get(
-  '/docs',
-  swaggerUI({
-    url: '/swagger.json', // Endpoint untuk mengambil spesifikasi OpenAPI
-  })
-);
+app.get("/docs", (c) => {
+    return c.html(`<!doctype html> <!-- Important: must specify -->
+<html>
+<head>
+  <meta charset="utf-8"> <!-- Important: rapi-doc uses utf8 characters -->
+  <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+</head>
+<body>
+  <rapi-doc
+    spec-url="https://raw.githubusercontent.com/LenzCompany/my-api/refs/heads/main/swagger-output.json"
+    theme = "dark"
+  > </rapi-doc>
+</body>
+</html>`)
+})
 
 // Mount backend API dengan prefix /api/v1
 app.route('/api/v1', api);
