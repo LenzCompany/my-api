@@ -3,7 +3,7 @@ import axios from "axios";
 import { fetchJson } from "../../lib/func.js";
 import { BloxFruit, copilot, npmSearch, hdown } from "../../lib/scraper.js";
 import { sendVerificationEmail } from "../../lib/email.js";
-import { readUsers, writeUsers } from "../../lib/db.js";
+import { getUsersCollection } from "../../lib/db.js";
 import { translate } from "@vitalets/google-translate-api";
 import QRCode from "qrcode";
 const api = new Hono();
@@ -20,11 +20,10 @@ api.post("/generate-qrcode", async (c) => {
     return c.json({ status: 400, error: "Text dan API Key diperlukan" }, 400);
   }
 
-  // Baca data pengguna dari file JSON
-  const users = readUsers();
+  const usersCollection = await getUsersCollection();
 
   // Cari pengguna berdasarkan API Key
-  const user = users.find((user) => user.apiKey === apiKey);
+  const user = await usersCollection.findOne({ apiKey });
   if (!user) {
     return c.json({ status: 401, error: "API Key tidak valid" }, 401);
   }
@@ -40,8 +39,7 @@ api.post("/generate-qrcode", async (c) => {
   }
 
   // Kurangi limit pengguna
-  user.limit -= 1;
-  writeUsers(users); // Tulis data pengguna ke file JSON
+  await usersCollection.updateOne({ _id: user._id }, { $inc: { limit: -1 } });
 
   try {
     // Generate QR Code
@@ -49,13 +47,14 @@ api.post("/generate-qrcode", async (c) => {
     return c.json({
       status: 200,
       qrCode, // Kembalikan QR Code dalam format Data URL
-      limit: user.limit, // Kembalikan sisa limit
+      limit: user.limit - 1, // Kembalikan sisa limit
     });
   } catch (error) {
     console.error("Error generating QR Code:", error);
     return c.json({ status: 500, error: "Gagal generate QR Code" }, 500);
   }
 });
+
 // Endpoint untuk translate
 api.post("/translate", async (c) => {
   const { text, to, apiKey } = await c.req.json();
@@ -63,11 +62,10 @@ api.post("/translate", async (c) => {
     return c.json({ status: 400, error: "Text, to, dan API Key diperlukan" }, 400);
   }
 
-  // Baca data pengguna dari file JSON
-  const users = readUsers();
+  const usersCollection = await getUsersCollection();
 
   // Cari pengguna berdasarkan API Key
-  const user = users.find((user) => user.apiKey === apiKey);
+  const user = await usersCollection.findOne({ apiKey });
   if (!user) {
     return c.json({ status: 401, error: "API Key tidak valid" }, 401);
   }
@@ -83,8 +81,7 @@ api.post("/translate", async (c) => {
   }
 
   // Kurangi limit pengguna
-  user.limit -= 1;
-  writeUsers(users); // Tulis data pengguna ke file JSON
+  await usersCollection.updateOne({ _id: user._id }, { $inc: { limit: -1 } });
 
   try {
     // Lakukan translate
@@ -92,13 +89,14 @@ api.post("/translate", async (c) => {
     return c.json({
       status: 200,
       translation: result.text,
-      limit: user.limit, // Kembalikan sisa limit
+      limit: user.limit - 1, // Kembalikan sisa limit
     });
   } catch (error) {
     console.error("Error translating text:", error);
     return c.json({ status: 500, error: "Gagal melakukan translate" }, 500);
   }
 });
+
 // Endpoint untuk login
 api.post("/login", async (c) => {
   const { email, password } = await c.req.json();
@@ -106,18 +104,17 @@ api.post("/login", async (c) => {
     return c.json({ status: 400, error: "Email dan password diperlukan" }, 400);
   }
 
-  // Baca data pengguna dari file JSON
-  const users = readUsers();
+  const usersCollection = await getUsersCollection();
 
   // Cari pengguna berdasarkan email dan password
-  const user = users.find((user) => user.email === email && user.password === password);
+  const user = await usersCollection.findOne({ email, password });
   if (!user) {
     return c.json({ status: 401, error: "Email atau password salah" }, 401);
   }
 
   // Cek status verifikasi
   if (!user.verified) {
-    return c.json({ status: 401, error: "Email belum diverifikasi. Silakan cek email Anda." }, 401);
+    return c.json({ status: 401, error: "Email belum diverifikasi" }, 401);
   }
 
   // Kembalikan API Key
@@ -126,17 +123,18 @@ api.post("/login", async (c) => {
     apiKey: user.apiKey,
   });
 });
+
 api.post("/register", async (c) => {
   const { email, password } = await c.req.json();
   if (!email || !password) {
     return c.json({ status: 400, error: "Email dan password diperlukan" }, 400);
   }
 
-  // Baca data pengguna dari file JSON
-  const users = readUsers();
+  const usersCollection = await getUsersCollection();
 
   // Cek apakah email sudah terdaftar
-  if (users.some((user) => user.email === email)) {
+  const existingUser = await usersCollection.findOne({ email });
+  if (existingUser) {
     return c.json({ status: 400, error: "Email sudah terdaftar" }, 400);
   }
 
@@ -151,8 +149,7 @@ api.post("/register", async (c) => {
     limit: 10, // Default limit 10 request per hari
     verified: false, // Status verifikasi awal: false
   };
-  users.push(user);
-  writeUsers(users); // Tulis data pengguna ke file JSON
+  await usersCollection.insertOne(user);
 
   // Kirim email verifikasi
   await sendVerificationEmail(email, apiKey);
@@ -170,18 +167,16 @@ api.get("/verify", async (c) => {
     return c.json({ status: 400, error: "Token verifikasi diperlukan" }, 400);
   }
 
-  // Baca data pengguna dari file JSON
-  const users = readUsers();
+  const usersCollection = await getUsersCollection();
 
   // Cari pengguna berdasarkan API Key (token)
-  const user = users.find((user) => user.apiKey === token);
+  const user = await usersCollection.findOne({ apiKey: token });
   if (!user) {
     return c.json({ status: 400, error: "Token verifikasi tidak valid" }, 400);
   }
 
   // Verifikasi pengguna
-  user.verified = true;
-  writeUsers(users); // Tulis data pengguna ke file JSON
+  await usersCollection.updateOne({ _id: user._id }, { $set: { verified: true } });
 
   return c.json({
     status: 200,

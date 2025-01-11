@@ -26,5 +26,12 @@
     "apiKey": "48xepfrjp9bnldtbo9fopr",
     "limit": 6,
     "verified": true
+  },
+  {
+    "email": "ndaacy@gmail.com",
+    "password": "123",
+    "apiKey": "z19tb4uqbccynbq13naxih",
+    "limit": 10,
+    "verified": false
   }
 ]
